@@ -1,6 +1,9 @@
 # learnMfrontAndSalomeMeca
 To help people get started with Mfront and SalomeMeca
 
+Pre-requisites:
+Ubuntu 18.04 
+
 Step 1 - Run SM installation
 . sm2018Install.sh
 
