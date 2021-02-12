@@ -1,7 +1,7 @@
 #! /usr/bin/env bash
 
 # Install pre-requisites (python 2.7)
-sudo apt-get install  gfortran g++ python-dev python-numpy liblapack-dev libblas-dev tcl tk zlib1g-dev bison flex checkinstall openmpi-bin libx11-dev cmake grace gettext libboost-all-dev swig
+sudo apt-get install  gcc gfortran g++ python-dev python-numpy liblapack-dev libblas-dev tcl tk zlib1g-dev bison flex checkinstall openmpi-bin libx11-dev cmake grace gettext libboost-all-dev swig
 sudo apt-get install libsuperlu-dev
 
 # Download and install SM2018
