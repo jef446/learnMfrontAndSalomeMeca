@@ -3,7 +3,7 @@
 @Date 20/03/2019;
 @Author A. Gangnant/T. Helfer/G. Torelli;
 @Description{
-  "An implicit version of FLB with LITS"
+  "An implicit version of FLB with LITS, used in https://repository.lib.ncsu.edu/bitstream/handle/1840.20/37554/SMiRT_LITS_2019_UKC_Submission_.pdf?sequence=1&isAllowed=y"
 }
 
 @Epsilon 1.e-16;
