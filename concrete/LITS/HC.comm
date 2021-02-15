@@ -1,0 +1,238 @@
+DEBUT(LANG='EN',PAR_LOT='NON')
+
+### This command file replicates the study in Section 3.1 of
+### https://www.sciencedirect.com/science/article/pii/S0020768316303456
+### Evolution of LITS under uniaxial constraint implemented via a bi-linear LITS model
+
+
+mesh = LIRE_MAILLAGE(FORMAT='MED',UNITE=21)
+
+mesh = MODI_MAILLAGE(reuse=mesh,
+                     MAILLAGE=mesh,
+                     ORIE_PEAU_3D=_F(GROUP_MA=('_ZZ', 'ZZ')))
+
+model = AFFE_MODELE(AFFE=_F(MODELISATION=('3D', ),
+                            PHENOMENE='MECANIQUE',
+                            TOUT='OUI'),
+                    MAILLAGE=mesh)
+
+libAsterPath='./Mfront/src/libAsterBehaviour.so'
+
+my_routine2='asterloadinducedthermalstrain_torelli2018_uniaxial'
+
+
+#	 _____ _                               _ 
+#	|_   _| |__   ___ _ __ _ __ ___   __ _| |
+#	  | | | '_ \ / _ \ '__| '_ ` _ \ / _` | |
+#	  | | | | | |  __/ |  | | | | | | (_| | |
+#	  |_| |_| |_|\___|_|  |_| |_| |_|\__,_|_|
+#______________________________________________________
+
+#################################
+#Heating cycle 
+################################   
+
+# ---------------------------------
+# 0:intial temp=20-->              |
+# 100:intial temp=20-->            |-----> Stage 1- initial heating
+# 200:heating to temp=100-->       |
+#----------------------------------
+# 300:heating to temp=140-->       |
+# 400:cooling to temp=20-->        |----->Stage 2- 1st heating cycle 
+# 450:heating to temp=140-->       |
+#----------------------------------
+# 500:heating to temp=180-->       |
+# 600:cooling to temp=20-->        |----->Stage 3- 2nd heating cycle
+# 650:heating to temp=180-->       |
+#----------------------------------
+# 700:heating to temp=220-->       |----->Stage 4- final heating 
+#----------------------------------
+
+#################################
+#DEFINING THE INSTANCES
+#################################                         
+
+
+########Instance lits
+
+#Ti=[0,2400,3600,7200,10800,12000,16800,21600,22800]
+Ti=[0,0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8]
+
+########Temps at those instances
+
+Te=[20,100,140,20,140,180,20,180,220]
+
+#creating TIME list from python list
+                         
+TIME = DEFI_LIST_REEL(VALE=(Ti))   
+ 
+#creating Instances to be used in stat_non_lin
+
+LISTT=DEFI_LIST_INST(DEFI_LIST=_F(LIST_INST=TIME),
+                      ECHEC=_F(ACTION='DECOUPE',
+                               SUBD_METHODE='MANUEL',
+                               SUBD_PAS=2,
+                               SUBD_NIVEAU=5,),)
+
+#################################
+#CREATING THE VARIOUS THERMAL FIELDS
+#################################                           
+
+#defining CHTEMP
+CHTEMP=[None]*len(Te)
+
+#loop to create different temp fields at different instance
+for i in range(0,len(Te)):
+ CHTEMP[i] = CREA_CHAMP(AFFE=_F(GROUP_NO=('Group_Nodes', ),
+                             NOM_CMP=('TEMP', ),
+                             VALE=(Te[i], )),
+                     MAILLAGE=mesh,
+                     OPERATION='AFFE',
+                     TYPE_CHAM='NOEU_TEMP_R')                 
+                     
+#################################
+#ASSIGNING THE THERMAL FIELDS AT DIFFERENT INSTANCES
+################################# 
+
+l_affe_temp=[]
+for i in range(0,len(Te)):
+	l_affe_temp.append(_F( CHAM_GD = CHTEMP[i],  MODELE = model, INST = Ti[i],))
+
+t_dum=CREA_RESU(OPERATION='AFFE',
+                TYPE_RESU='EVOL_THER',
+                NOM_CHAM='TEMP',
+                AFFE=l_affe_temp)
+
+              
+          
+#IMPR_RESU(FORMAT='MED',VERSION_MED='4.0.0',UNITE=81,RESU=_F(RESULTAT=t_dum))
+     
+                           
+# #	 __  __       _            _       _     
+# #	|  \/  | __ _| |_ ___ _ __(_) __ _| |___ 
+# #	| |\/| |/ _` | __/ _ \ '__| |/ _` | / __|
+# #	| |  | | (_| | ||  __/ |  | | (_| | \__ \
+# #	|_|  |_|\__,_|\__\___|_|  |_|\__,_|_|___/
+# #_____________________________________________________              
+
+####################
+#material parameters
+####################
+
+#ELAS PROPERTIES
+young0=47000e6 #Pa
+nu0=0.25
+alpha0=1.62e-5 # strain*c^-1
+lambd=0.7 # Wm^-1K^-1
+rho_cp=6.2e6  # Jm^-3K^-1
+#LITS PROPERTIES
+alpha_lits= alpha0
+GAMMA_lits=1.5
+SIGMU_lits=57.0E6 #Pa
+NULITS_lits=0.37
+TCRIT_lits=100. #C
+
+
+
+###################
+#defining constants
+###################
+
+#ELAS PROPERTIES
+YOUNG=DEFI_CONSTANTE( VALE=young0 )
+POIS=DEFI_CONSTANTE( VALE=nu0 )
+ALPHA_CO=DEFI_CONSTANTE( VALE=alpha0 )
+alpha_0=DEFI_CONSTANTE( VALE=0. )
+#LITS PROPERTIES
+GAMMA=DEFI_CONSTANTE( VALE=GAMMA_lits)
+SIGMU=DEFI_CONSTANTE( VALE=SIGMU_lits )
+NULITS=DEFI_CONSTANTE( VALE=NULITS_lits )
+TCRIT=DEFI_CONSTANTE( VALE=TCRIT_lits)
+lamb=DEFI_CONSTANTE( VALE=lambd )
+rho_cp=DEFI_CONSTANTE( VALE=rho_cp)
+
+
+####concrete definition from gatens script
+
+concrete = DEFI_MATERIAU(
+				ELAS_FO=_F(E = YOUNG, NU=POIS, ALPHA = alpha_0, TEMP_DEF_ALPHA = 20.0,),    #ALPHA ?
+				MFRONT_FO=_F(LISTE_COEF=(YOUNG, POIS, ALPHA_CO, GAMMA, SIGMU, NULITS, TCRIT,)),
+				THER_NL=_F(LAMBDA=lamb,		#[(J/s)/(m K)]= [W/(m K)]
+                           RHO_CP=rho_cp,),)		#[J/(m3 K)]
+
+
+
+#applying concrete maetrial and the external state of the thermal field
+
+fieldmat = AFFE_MATERIAU(MAILLAGE=mesh,AFFE=_F(TOUT='OUI',MATER=concrete,),
+								AFFE_VARC=_F(TOUT='OUI',
+								EVOL=t_dum,
+								PROL_DROITE='CONSTANT',
+								PROL_GAUCHE='CONSTANT',
+								NOM_VARC='TEMP',
+								VALE_REF=20,),)
+            
+# # # __  __           _                 _           _ 
+# # #|  \/  | ___  ___| |__   __ _ _ __ (_) ___ __ _| |
+# # #| |\/| |/ _ \/ __| '_ \ / _` | '_ \| |/ __/ _` | |
+# # #| |  | |  __/ (__| | | | (_| | | | | | (_| (_| | |
+# # #|_|  |_|\___|\___|_| |_|\__,_|_| |_|_|\___\__,_|_|
+# # #_____________________________________________________  
+
+#boundary conditions
+                                
+#BC = AFFE_CHAR_MECA(PRES_REP=(_F(GROUP_MA='ZZ',PRES=27.e6),_F(GROUP_MA=('YY','ZZ'),PRES=1.e6)),DDL_IMPO=(_F(DX=0.0,
+BC = AFFE_CHAR_MECA(DDL_IMPO=(_F(DX=0.0,
+                                 GROUP_MA=('_XX', )),
+                              _F(DY=0.0,
+                                 GROUP_MA=('_YY', )),
+                              _F(DZ=0.0,
+                                 GROUP_MA=('_ZZ','ZZ'))),
+                    MODELE=model)                               
+
+                          
+
+                      
+# # #	 ____                 _ _       
+# # #	|  _ \ ___  ___ _   _| | |_ ___ 
+# # #	| |_) / _ \/ __| | | | | __/ __|
+# # #	|  _ <  __/\__ \ |_| | | |_\__ \
+# # #	|_| \_\___||___/\__,_|_|\__|___/
+# # #_____________________________________________		                                                                              
+
+
+reslin=[]
+
+ 
+reslin=(STAT_NON_LINE(reuse=reslin,MODELE=model,
+                      CHAM_MATER=fieldmat,
+                      EXCIT=(_F(CHARGE=BC),),
+                      COMPORTEMENT=(_F(LIBRAIRIE=libAsterPath,                     
+				                       NOM_ROUTINE=my_routine2,
+				                       RELATION='MFRONT',
+							           TOUT='OUI',                                       
+				                       RESI_INTE_MAXI=1.E-12,
+				                       ITER_INTE_MAXI=50.),),                                     
+                      INCREMENT=_F(LIST_INST=LISTT),
+                      NEWTON=_F(REAC_ITER=3,
+                      PREDICTION='ELASTIQUE',),
+                      CONVERGENCE=_F(RESI_GLOB_RELA=1.E-2,ITER_GLOB_MAXI=30 ),))
+                           
+
+
+resf=CALC_CHAMP(RESULTAT=reslin, CONTRAINTE=('SIGM_NOEU'), )#CRITERES=('SIEQ_NOEU'))
+ 
+
+IMPR_RESU(FORMAT='MED',RESU=_F(MAILLAGE=mesh,TOUT_CHAM='OUI',RESULTAT=resf),UNITE=82) 
+
+IMPR_RESU(FORMAT='RESULTAT',RESU=_F(MAILLAGE=mesh,TOUT_CHAM='OUI',RESULTAT=resf),UNITE=81) 
+IMPR_RESU(FORMAT='RESULTAT',RESU=_F(RESULTAT=t_dum),UNITE=81) 
+        
+
+
+         
+
+
+                        
+
+FIN()
