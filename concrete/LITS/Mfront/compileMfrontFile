@@ -1,0 +1,1 @@
+CXXFLAGS="-D_GLIBCXX_USE_CXX11_ABI=0 `tfel-config --compiler-flags --oflags`" mfront --obuild --interface=aster LoadInducedThermalStrain_Torelli2018_uniaxial.mfront
