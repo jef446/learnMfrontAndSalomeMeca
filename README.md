@@ -18,4 +18,8 @@ To help people get started with Mfront and SalomeMeca
 `.  mfrontInstall.sh `
 
 
+## Example FE simulations with MFront
+Some example files are located [here](https://github.com/jef446/learnMfrontAndSalomeMeca/tree/main/concrete/LITS). Please read the README.md files.
+
+
 
