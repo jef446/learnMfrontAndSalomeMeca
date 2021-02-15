@@ -1,0 +1,196 @@
+@DSL Implicit;
+@Behaviour FLB_LITSv1;
+@Date 20/03/2019;
+@Author A. Gangnant/T. Helfer/G. Torelli;
+@Description{
+  "An implicit version of FLB with LITS"
+}
+
+@Epsilon 1.e-16;
+@Theta 1;
+
+
+
+
+
+// ================Material Properties==================//
+
+// Elastic Properties
+@MaterialProperty stress young;
+young.setGlossaryName("YoungModulus");
+@MaterialProperty real nu;
+nu.setGlossaryName("PoissonRatio");
+
+// Material Property Damage
+@MaterialProperty real gf;
+@MaterialProperty real ft;
+@MaterialProperty real e0;
+@MaterialProperty real a;
+@MaterialProperty real coef1;
+
+
+// Material Property LITS
+@MaterialProperty real alpha;
+
+
+@MaterialProperty real gamma;
+
+@MaterialProperty real sigmultimate;
+@MaterialProperty real nulits;
+
+@MaterialProperty real tcrit;
+
+// uniaxial LITS function for temperature up to 500
+@Parameter b[5] = {2.7031065533E-05, -1.0209170592E-06, 6.1200423753E-9, -1.2632648735E-11,
+                   6.9158539621E-15};
+
+
+
+// ================State Variable ==================//
+
+// ==============NORTON ==========
+//@StateVariable strain p;
+//p.setGlossaryName("EquivalentPlasticStrain");
+
+
+// ==============FLB ==========
+
+@AuxiliaryStateVariable real d;
+d.setGlossaryName("Damage");
+
+@AuxiliaryStateVariable StressStensor sig_an;
+sig_an.setEntryName("InelasticStress");
+
+@AuxiliaryStateVariable real Bt1;
+ 
+
+// ==============LITS ==========
+@StateVariable Stensor ELITS;
+@AuxiliaryStateVariable Stensor EFTS;
+@AuxiliaryStateVariable real tmax;
+
+
+// ExternalState Variable to get the element size from code_aster
+@ExternalStateVariable real ELTSIZE1;
+
+
+// ================Local Variable ==================//
+
+// Local Variable - HOoke Law
+@LocalVariable stress lambda, mu;
+@LocalVariable StiffnessTensor De;
+@LocalVariable StrainStensor deth;
+// ================Initi Variable ==================//
+@InitLocalVariables {
+  lambda = computeLambda(young, nu);
+  mu = computeMu(young, nu);
+  De = lambda * Stensor4::IxI() + 2 * mu * Stensor4::Id();
+  tmax = max(max(tcrit, tmax), T);
+  deth = alpha * dT * Stensor::Id();
+}
+
+// Tangent operator of Burger-to evaluate the tangent operator starting from the inverse of the Jacobian matrix
+@TangentOperator{
+  using namespace tfel::material::lame;
+  if((smt==ELASTIC)||(smt==SECANTOPERATOR)){
+    computeAlteredElasticStiffness<hypothesis,Type>::exe(Dt,lambda,mu);
+  } 
+  else if(smt==CONSISTENTTANGENTOPERATOR){
+    StiffnessTensor Hooke;
+    Stensor4 Je;
+    computeElasticStiffness<N,Type>::exe(Hooke,lambda,mu);
+    getPartialJacobianInvert(Je);
+    Dt = (1-d)*Hooke*Je;
+  } else {
+    return false;
+  }
+}
+
+
+@Integrator{
+  // Bt computation 
+  const auto h_el = ELTSIZE1/coef1;
+  const auto Bt =  (h_el *ft )/ (gf-(0.5*e0*h_el*ft));
+  // Initialistion Implicit + Misc
+  constexpr const strain eeps = 1.e-12;
+  constexpr const auto id = Stensor::Id();
+  const auto seps = eeps * young;
+  auto square_ppos = [](const strain& v) { return v > 0 ? v * v : 0; };
+  // total elastic strain at the end of the time step
+  const auto e = eval(eel + theta * deel);
+  // update the damage
+  const auto e_vp = e.computeEigenValues();
+  const auto e_eq = sqrt(square_ppos(e_vp[0]) + square_ppos(e_vp[1]) + square_ppos(e_vp[2]));
+  const auto de = (e_eq > e0) ? max(d, 1 - (e0 / e_eq) * exp(Bt * (e0 - e_eq))) : d;
+  // function of the damage to simplify expressions
+  const auto fpd = (1 - de);
+  const auto fpn = (1 - pow(de, a));
+  // effective stress at the end of the time step
+  const auto s = eval(lambda * trace(e) * id + 2 * mu * e);
+  // positive part
+  const auto pp = [](const real x) { return x > 0 ? x : 0; };
+  // derivative of the positive part
+  const auto dpp = [&seps](const real x) { return std::abs(x) < seps ? 0.5 : ((x < 0) ? 0 : 1); };
+  const auto sp_dsp = s.computeIsotropicFunctionAndDerivative(pp, dpp, seps * 0.1);
+  const auto& sp = sp_dsp.first;
+  const auto& dsp = sp_dsp.second;  // derivative of sp with respect to s
+  const auto sn = s - sp;
+  // final stress
+  sig = fpd * sp + fpn * sn;
+  // secant operator (assuming constant damage), shall be improved
+//  const auto dsig_ddeel = eval(theta * ((fpd - fpn) * dsp + fpn * Stensor4::Id()) * De);
+//  const auto dsig_ddeel = dsig_ddeel + dsig_dd*dd_ddeel;
+
+  if ((T + dT > tmax) && (trace(sig) < 0)) {
+    // Decomposition of the stress tensor in positive and negative
+    // parts
+    const auto sig_p = positive_part(sig);
+    const auto sig_n = sig - sig_p;
+    //----- Multiaxial correction coefficient
+    const auto s_den = sqrt(sig_n | sig_n);
+    real cm = 1;
+    if (s_den > 1.e-12 * young) {
+      cm = -trace(sig_n) / s_den;
+    }
+    const auto eta = 1 + (cm - 1) * gamma;
+    const auto mybeta = b[0] + T * (b[1] + T * (b[2] + T * (b[3] + T * b[4])));
+    fELITS -= (mybeta / (-sigmultimate)) * eta *
+              ((1 + nulits) * (sig_n)-nulits * trace(sig_n) * Stensor::Id()) * (T + dT - tmax);
+  }
+
+  // elasticity
+   feel += dELITS + deth -deto;
+
+  // Give Bt
+  Bt1 = Bt;
+}
+
+//@UpdateAuxiliaryStateVariables {
+// Bt1 = Bt;
+//}
+
+@UpdateAuxiliaryStateVariables {
+  EFTS += deth;
+}
+
+@ComputeFinalStress {
+  auto square_ppos = [](const strain& v) { return v > 0 ? v * v : 0; };
+  constexpr const auto id = Stensor::Id();
+  // update the damage
+  const auto e_vp = eel.computeEigenValues();
+  const auto e_eq = sqrt(square_ppos(e_vp[0]) + square_ppos(e_vp[1]) + square_ppos(e_vp[2]));
+  if (e_eq > e0) {
+    d = max(d, 1 - (e0 / e_eq) * exp(Bt1 * (e0 - e_eq)));
+  }
+  // function of the damage to simplify expressions
+  const auto fpd = (1 - d);
+  const auto fpn = (1 - pow(d, a));
+  // effective stress at the end of the time step
+  const auto s = eval(lambda * trace(eel) * id + 2 * mu * eel);
+  const auto sp = positive_part(s);
+  const auto sn = s - sp;
+  // final stress
+  sig = fpd * sp + fpn * sn;
+  // anelastic stress
+  sig_an = s - sig;
+}
