@@ -1,0 +1,81 @@
+@Parser Implicit;
+@Behaviour LoadInducedThermalStrain_Torelli2018_uniaxial;
+@Author Giacomo Torelli;
+@Date 25 / 03 / 2018;
+@Description {
+  "A confinement-dependent load-induced thermal strain "
+  "constitutive model for concrete subjected "
+  "to temperatures up to 500 °C"
+
+  "Torelli, Giacomo and Mandal, Parthasarathi and Gillie, "
+  "Martin and Tran, Van-Xuan"
+
+  "International Journal of Mechanical Sciences"
+
+  "http://www.sciencedirect.com/science/article/pii/S0020740317337372"
+}
+
+@Algorithm NewtonRaphson_NumericalJacobian;
+@Theta 0.5;
+@IterMax 100;
+@Epsilon 1.E-14;
+
+
+@PerturbationValueForNumericalJacobianComputation 1.e-8;
+
+@ModellingHypotheses{".+"};
+@Brick StandardElasticity;
+
+@MaterialProperty stress young;
+young.setGlossaryName("YoungModulus");
+@MaterialProperty real nu;
+nu.setGlossaryName("PoissonRatio");
+
+@MaterialProperty real alpha;  // before
+
+@MaterialProperty real gamma;
+@MaterialProperty real sigmultimate;
+@MaterialProperty real nulits;
+@MaterialProperty real tcrit;
+
+
+
+@Parameter b[5] = {-2.38E-05, 0., 0., 0.,
+                   0.};
+
+@StateVariable Stensor ELITS;
+@AuxiliaryStateVariable Stensor EFTS;
+@AuxiliaryStateVariable real tmax;
+
+// ! thermal strain increment (scalar)
+@LocalVariable StrainStensor deth;
+
+@InitLocalVariables {
+  tmax = max(max(tcrit, tmax), T);
+  deth = alpha * dT * Stensor::Id();
+}
+
+@Integrator {
+  if ((T + dT > tmax) && (trace(sig) < 0)) {
+    // Decomposition of the stress tensor in positive and negative
+    // parts
+    const auto sig_p = positive_part(sig);
+    const auto sig_n = sig - sig_p;
+    //----- Multiaxial correction coefficient
+    const auto s_den = sqrt(sig_n | sig_n);
+    real cm = 1;
+    if (s_den > 1.e-12 * young) {
+      cm = -trace(sig_n) / s_den;
+    }
+    const auto eta = 1 + (cm - 1) * gamma;
+    const auto mybeta = b[0] + T * (b[1] + T * (b[2] + T * (b[3] + T * b[4])));
+    fELITS -= (mybeta / (-sigmultimate)) * eta *
+              ((1 + nulits) * (sig_n)-nulits * trace(sig_n) * Stensor::Id()) * (T + dT - tmax);
+  }
+  // elasticity
+  feel += dELITS + deth;
+}
+
+@UpdateAuxiliaryStateVariables {
+  EFTS += deth;
+}
