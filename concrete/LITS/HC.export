@@ -1,0 +1,17 @@
+F comm ./HC.comm D  1
+F mail ./Mesh_18.med D  21
+F libr ./HC.resu R  81
+F rmed ./HC.rmed R  82
+F mess ./message R  6
+
+P facmtps 1
+P follow_output yes
+P lang en
+P mclient mbgm6aab-VirtualBox
+P memjob 2097152
+P memory_limit 2048.0
+
+P version stable
+A args 
+A memjeveux 256.0
+A tpmax 900.0
