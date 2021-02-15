@@ -12,3 +12,23 @@ Happily, to support you getting started, this folder contains:
 * .comm file for code_aster solver
 * .export file indicating code_aster solver settings
 * .mmed file is a code_aster mesh
+
+## Step 2 - Run a simulation referencing the behaviour law and the shared library
+As an example, we use the command file and mesh in this directory. 
+Note that the shared library is referenced on [line 19](https://github.com/jef446/learnMfrontAndSalomeMeca/blob/main/concrete/LITS/HC.comm) and the name of the behaviour law is reference on [line 21](https://github.com/jef446/learnMfrontAndSalomeMeca/blob/main/concrete/LITS/HC.comm)
+
+To run a simulation with code_aster using the Salome_Meca platform:
+
+1. start a salome shell session: `pathToSalome/salome shell`
+1. Open astk: `astk &`
+1. Import simulation settings: File>Import .export 
+1. Run simulation
+
+## Step 3- Post Process results
+You should manipulate output results as you wish. Here we aim to reproduce [Figure 5](https://www.sciencedirect.com/science/article/pii/S0020768316303456).
+
+Using Salome graphically, or an appropriate [post-processing script](https://github.com/jef446/learnMfrontAndSalomeMeca/blob/main/concrete/LITS/postProcessResu.py) you can produce your graphs.
+
+To run this example python script, type:
+
+` python postProcessResu.py`
